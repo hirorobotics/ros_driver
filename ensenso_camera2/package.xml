@@ -17,6 +17,9 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
 
+  <!-- Boost.Math is used by the timestamp conversion header. -->
+  <build_depend>boost</build_depend>
+
   <!-- Check what about roslint, actually a very handy tool and we would like to keep it!!! -->
   <!-- <build_depend>roslint</build_depend> -->
 
@@ -40,9 +43,12 @@
   <!-- Should now be part of rclcpp -->
   <!-- <depend>nodelet</depend> -->
 
-  <depend>pcl_conversions</depend>
-  <depend>pcl_ros</depend>
+  <!-- Export ENSENSO_WITH_PCL=OFF before rosdep and colcon for an image/calibration build. -->
+  <depend condition="$ENSENSO_WITH_PCL != 'OFF'">pcl_conversions</depend>
+  <depend condition="$ENSENSO_WITH_PCL != 'OFF'">pcl_ros</depend>
   <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>rclcpp_components</depend>
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
   <depend>visualization_msgs</depend>

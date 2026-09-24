@@ -2,7 +2,9 @@
 
 #include "ensenso_camera/camera.h"
 
+#ifndef ENSENSO_DISABLE_PCL
 #include "ensenso_camera/ros2/pcl.h"
+#endif
 
 #include "ensenso_camera/ros2/ensenso_msgs/calibrate_hand_eye.h"
 #include "ensenso_camera/ros2/ensenso_msgs/calibrate_workspace.h"
@@ -49,10 +51,12 @@ private:
   image_transport::CameraPublisher depthImagePublisher;
   image_transport::Publisher projectedImagePublisher;
 
+#ifndef ENSENSO_DISABLE_PCL
   PointCloudPublisher<ensenso::pcl::PointCloud> pointCloudPublisher;
   PointCloudPublisher<ensenso::pcl::PointCloudNormals> pointCloudNormalsPublisher;
   PointCloudPublisher<ensenso::pcl::PointCloudColored> pointCloudColoredPublisher;
   PointCloudPublisher<ensenso::pcl::PointCloud> pointCloudProjectedPublisher;
+#endif
 
   // Information that we remember between the different steps of the hand-eye calibration. We save the pattern buffer
   // outside of the NxLib, because otherwise we could not use the LocatePattern action while a hand-eye calibration is

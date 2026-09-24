@@ -49,12 +49,14 @@ void StereoCamera::advertiseTopics()
   depthImagePublisher = ensenso::image_transport::create_camera_publisher(nh, "depth/image");
   projectedImagePublisher = ensenso::image_transport::create_publisher(nh, "depth/projected_depth_map");
 
+#ifndef ENSENSO_DISABLE_PCL
   pointCloudPublisher = ensenso::pcl::create_publisher<ensenso::pcl::PointCloud>(nh, "point_cloud", 1);
   pointCloudNormalsPublisher = ensenso::pcl::create_publisher<ensenso::pcl::PointCloudNormals>(nh, "point_cloud", 1);
   pointCloudColoredPublisher =
       ensenso::pcl::create_publisher<ensenso::pcl::PointCloudColored>(nh, "point_cloud_color", 1);
   pointCloudProjectedPublisher =
       ensenso::pcl::create_publisher<ensenso::pcl::PointCloud>(nh, "projected_point_cloud", 1);
+#endif
 }
 
 void StereoCamera::init()
@@ -201,6 +203,22 @@ void StereoCamera::onRequestData(ensenso::action::RequestDataGoalConstPtr const&
 
   ensenso::action::RequestDataResult result;
   ensenso::action::RequestDataFeedback feedback;
+
+#ifdef ENSENSO_DISABLE_PCL
+  // An empty request normally selects a point cloud; do not silently change its meaning.
+  bool const defaultPointCloud = !goal->request_raw_images && !goal->request_rectified_images &&
+                                !goal->request_disparity_map && !goal->request_depth_image &&
+                                !goal->request_point_cloud && !goal->request_normals;
+  if (goal->request_point_cloud || goal->request_normals || defaultPointCloud)
+  {
+    result.error.code = ERROR_CODE_UNSUPPORTED_FEATURE;
+    result.error.message = "Point clouds and normals are disabled in this build (ENSENSO_WITH_PCL=OFF). "
+                           "Explicitly request raw, rectified, disparity, or depth images instead.";
+    ENSENSO_ERROR(nh, "%s", result.error.message.c_str());
+    requestDataServer->setAborted(std::move(result));
+    return;
+  }
+#endif
 
   // Automatically enable publishing if neither publish_reults nor include_results_in_response is enabled.
   bool publishResults = goal->publish_results;
@@ -411,6 +429,7 @@ void StereoCamera::onRequestData(ensenso::action::RequestDataGoalConstPtr const&
     computePointMap.parameters()[itmCameras] = params.serial;
     computePointMap.execute();
 
+#ifndef ENSENSO_DISABLE_PCL
     PointCloudROI const* pointCloudROI = 0;
     if (parameterSets.at(currentParameterSet).useROI)
     {
@@ -449,6 +468,7 @@ void StereoCamera::onRequestData(ensenso::action::RequestDataGoalConstPtr const&
         publishPointCloud(pointCloudNormalsPublisher, std::move(pointCloud));
       }
     }
+#endif
   }
 
   PREEMPT_ACTION_IF_REQUESTED
@@ -1047,6 +1067,18 @@ void StereoCamera::onTelecentricProjection(ensenso::action::TelecentricProjectio
 
   ensenso::action::TelecentricProjectionResult result;
 
+#ifdef ENSENSO_DISABLE_PCL
+  if (goal->request_point_cloud || !goal->request_depth_image)
+  {
+    result.error.code = ERROR_CODE_UNSUPPORTED_FEATURE;
+    result.error.message = "Projected point clouds are disabled in this build (ENSENSO_WITH_PCL=OFF). "
+                           "Explicitly request a depth image instead.";
+    ENSENSO_ERROR(nh, "%s", result.error.message.c_str());
+    telecentricProjectionServer->setAborted(std::move(result));
+    return;
+  }
+#endif
+
   bool useViewPose = isValid(goal->view_pose);
   bool frameGiven = !goal->frame.empty();
 
@@ -1100,6 +1132,7 @@ void StereoCamera::onTelecentricProjection(ensenso::action::TelecentricProjectio
 
   if (goal->publish_results || goal->include_results_in_response)
   {
+#ifndef ENSENSO_DISABLE_PCL
     if (goal->request_point_cloud || (!goal->request_point_cloud && !goal->request_depth_image))
     {
       auto pointCloud = retrieveRenderedPointCloud(renderPointMap.result(), goal->frame, params.isFileCamera);
@@ -1118,6 +1151,7 @@ void StereoCamera::onTelecentricProjection(ensenso::action::TelecentricProjectio
         publishPointCloud(pointCloudProjectedPublisher, std::move(pointCloud));
       }
     }
+#endif
 
     if (goal->request_depth_image)
     {
@@ -1151,6 +1185,14 @@ void StereoCamera::onTexturedPointCloud(ensenso::action::TexturedPointCloudGoalC
   START_NXLIB_ACTION(TexturedPointCloud, texturedPointCloudServer)
 
   ensenso::action::TexturedPointCloudResult result;
+
+#ifdef ENSENSO_DISABLE_PCL
+  (void)goal;
+  result.error.code = ERROR_CODE_UNSUPPORTED_FEATURE;
+  result.error.message = "Textured point clouds are disabled in this build (ENSENSO_WITH_PCL=OFF).";
+  ENSENSO_ERROR(nh, "%s", result.error.message.c_str());
+  texturedPointCloudServer->setAborted(std::move(result));
+#else
 
   if (goal->mono_serial.empty())
   {
@@ -1198,6 +1240,8 @@ void StereoCamera::onTexturedPointCloud(ensenso::action::TexturedPointCloudGoalC
   {
     texturedPointCloudServer->setSucceeded();
   }
+
+#endif
 
   FINISH_NXLIB_ACTION(TexturedPointCloud)
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#ifndef ENSENSO_DISABLE_PCL
 #include "ensenso_camera/ros2/pcl.h"
 
 namespace ensenso
@@ -11,6 +12,7 @@ using PointCloudNormals = ::pcl::PointCloud<::pcl::PointNormal>;
 using PointCloudColored = ::pcl::PointCloud<::pcl::PointXYZRGB>;
 }  // namespace pcl
 }  // namespace ensenso
+#endif
 
 struct PointCloudROI
 {

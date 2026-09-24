@@ -2,6 +2,26 @@ cmake_minimum_required(VERSION 3.5)
 
 project(ensenso_camera)
 
+# Use the same switch for CMake, rosdep (package.xml), and the SDK install script.
+# An unset environment variable preserves the existing PCL-enabled build.
+set(ensenso_with_pcl_default ON)
+if(DEFINED ENV{ENSENSO_WITH_PCL} AND NOT "$ENV{ENSENSO_WITH_PCL}" STREQUAL "")
+  if(NOT "$ENV{ENSENSO_WITH_PCL}" STREQUAL "ON" AND NOT "$ENV{ENSENSO_WITH_PCL}" STREQUAL "OFF")
+    message(FATAL_ERROR "ENSENSO_WITH_PCL must be ON or OFF when set in the environment")
+  endif()
+  set(ensenso_with_pcl_default "$ENV{ENSENSO_WITH_PCL}")
+endif()
+option(ENSENSO_WITH_PCL "Build point-cloud support and the texture_point_cloud node" ${ensenso_with_pcl_default})
+if(ENSENSO_WITH_PCL AND NOT ensenso_with_pcl_default)
+  message(FATAL_ERROR "ENSENSO_WITH_PCL=OFF in the environment; also pass -DENSENSO_WITH_PCL=OFF to clear the cached option")
+endif()
+# Keep ament's dependency evaluation consistent with the selected CMake option.
+if(ENSENSO_WITH_PCL)
+  set(ENV{ENSENSO_WITH_PCL} ON)
+else()
+  set(ENV{ENSENSO_WITH_PCL} OFF)
+endif()
+
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
@@ -20,6 +40,8 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
+# ros2/time.h uses Boost.Math headers even when PCL is disabled.
+find_package(Boost REQUIRED)
 find_package(common_interfaces REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(ensenso_camera_msgs REQUIRED)
@@ -28,8 +50,10 @@ find_package(geometry_msgs REQUIRED)
 find_package(image_geometry REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(OpenCV 4.0.0 REQUIRED)
-find_package(pcl_conversions REQUIRED)
-find_package(pcl_ros REQUIRED)
+if(ENSENSO_WITH_PCL)
+  find_package(pcl_conversions REQUIRED)
+  find_package(pcl_ros REQUIRED)
+endif()
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_components REQUIRED)
@@ -80,10 +104,17 @@ add_library(ensenso_camera SHARED
 target_compile_definitions(ensenso_camera
   PRIVATE "ENSENSO_CAMERA_BUILDING_DLL"
 )
+if(ENSENSO_WITH_PCL)
+  ament_target_dependencies(ensenso_camera pcl_conversions pcl_ros)
+else()
+  # Public because StereoCamera's members depend on this definition.
+  target_compile_definitions(ensenso_camera PUBLIC ENSENSO_DISABLE_PCL)
+endif()
 target_link_libraries(ensenso_camera
   ${ENSENSO_LIBRARIES}
 )
 ament_target_dependencies(ensenso_camera
+  Boost
   common_interfaces
   cv_bridge
   diagnostic_msgs
@@ -91,8 +122,6 @@ ament_target_dependencies(ensenso_camera
   geometry_msgs
   image_geometry
   image_transport
-  pcl_conversions
-  pcl_ros
   rclcpp
   rclcpp_action
   rclcpp_components
@@ -152,28 +181,30 @@ ament_target_dependencies(ensenso_camera_node
 #-----------------------------------------------------------------------------------------------------------------------
 # texture_point_cloud_node
 #-----------------------------------------------------------------------------------------------------------------------
-add_executable(texture_point_cloud
-  src/texture_point_cloud.cpp
-)
-target_link_libraries(texture_point_cloud
-  ${ENSENSO_LIBRARIES}
-  ${PCL_LIBRARIES}
-)
-ament_target_dependencies(texture_point_cloud
-  common_interfaces
-  cv_bridge
-  diagnostic_msgs
-  geometry_msgs
-  image_geometry
-  image_transport
-  pcl_conversions
-  pcl_ros
-  rclcpp
-  rclcpp_action
-  rclcpp_components
-  std_msgs
-  OpenCV
-)
+if(ENSENSO_WITH_PCL)
+  add_executable(texture_point_cloud
+    src/texture_point_cloud.cpp
+  )
+  target_link_libraries(texture_point_cloud
+    ${ENSENSO_LIBRARIES}
+    ${PCL_LIBRARIES}
+  )
+  ament_target_dependencies(texture_point_cloud
+    common_interfaces
+    cv_bridge
+    diagnostic_msgs
+    geometry_msgs
+    image_geometry
+    image_transport
+    pcl_conversions
+    pcl_ros
+    rclcpp
+    rclcpp_action
+    rclcpp_components
+    std_msgs
+    OpenCV
+  )
+endif()
 
 #-----------------------------------------------------------------------------------------------------------------------
 # INSTALLATION
@@ -188,18 +219,23 @@ install(TARGETS
 install(TARGETS
   ensenso_camera_mono_node
   ensenso_camera_node
-  texture_point_cloud
   DESTINATION lib/${PROJECT_NAME}
 )
+
+if(ENSENSO_WITH_PCL)
+  install(TARGETS texture_point_cloud DESTINATION lib/${PROJECT_NAME})
+  install(FILES launch/texture_point_cloud.launch.py DESTINATION share/${PROJECT_NAME}/launch)
+  install(PROGRAMS scripts/color_point_cloud DESTINATION lib/${PROJECT_NAME})
+endif()
 
 install(DIRECTORY
   launch
   DESTINATION share/${PROJECT_NAME}/
+  PATTERN "texture_point_cloud.launch.py" EXCLUDE
 )
 
 install(PROGRAMS
   scripts/calibrate_handeye
-  scripts/color_point_cloud
   scripts/fit_primitive
   scripts/image_stream
   scripts/image_stream_mono

@@ -22,6 +22,10 @@ export ROS_VERSION=2 && ./.github/scripts/prepare_ros2_build.sh
 ```
 
 ## Install external dependencies
+For a ROS 2 build without PCL, export `ENSENSO_WITH_PCL=OFF` before installing dependencies.
+Both the external dependency script and the ROS 2 package manifest honor this setting;
+see [Building without PCL](#building-without-pcl) below.
+
 Before we can build the ament workspace we have to install an Ensenso SDK and some external dependencies. If you do not
 have an Ensenso SDK installed, you can run:
 ```
@@ -49,6 +53,65 @@ sudo apt install ros-${ROS_DISTRO}-xacro
 
 ## Build the package
 Now you should be able to run `colcon build`.
+
+### Building without PCL
+
+ROS 2 has an optional `ENSENSO_WITH_PCL` CMake switch, which defaults to `ON`.
+Set the environment variable to `OFF` before running `rosdep` or the external dependency
+installer, and pass the matching CMake option when building. The environment variable
+controls conditional package dependencies; the CMake option controls compilation and
+also overrides any cached setting from a previous build. Use uppercase `ON` or `OFF`.
+The Ensenso SDK, OpenCV, Boost headers, and the remaining ROS 2 dependencies are still required.
+
+After preparing the repository for ROS 2, these commands can be used from the workspace
+root. They install dependencies for, and build, only the driver and its interfaces.
+Separate build/install directories prevent leftover point-cloud executables from an
+older installation from appearing in this variant.
+
+```bash
+export ENSENSO_WITH_PCL=OFF
+rosdep install --from-paths src/ros_driver/ensenso_camera2 src/ros_driver/ensenso_camera_msgs2 \
+  --ignore-src --rosdistro "$ROS_DISTRO" -y
+colcon build --packages-up-to ensenso_camera \
+  --build-base build_no_pcl --install-base install_no_pcl \
+  --cmake-args -DENSENSO_WITH_PCL=OFF
+source install_no_pcl/setup.bash
+```
+
+Use the regular `stereo_node.launch.py` or `mono_node.launch.py` launch files.
+The `ensenso_description` package can be built separately if camera-model launch files
+are needed. The existing point-cloud test suite assumes a PCL-enabled driver and is
+not included in the build selection above.
+
+In this variant:
+
+- Raw/rectified images, disparity images, and depth images remain available, subject to
+  the camera's normal capabilities. Depth images use NxLib's internal point map without
+  converting it into a PCL cloud or returning a ROS point cloud.
+- Pattern detection, hand-eye calibration, workspace calibration, and TF publishing
+  retain their existing implementations.
+- Point-cloud topics are not advertised. The `texture_point_cloud` executable, its launch
+  file, and the `color_point_cloud` script are not built/installed.
+- `RequestData` requests for point clouds or normals abort with `error.code = 102` and an
+  explanatory message. An empty goal also aborts because it normally requests a cloud;
+  explicitly select at least one image type. A mixed image/cloud request aborts as a whole.
+- `TexturedPointCloud` requests abort with the same error code. `TelecentricProjection`
+  supports explicit depth-image-only requests; its cloud requests/default goals abort.
+- Action/message definitions remain compatible, including their `PointCloud2` result
+  fields. Defining these ROS messages does not require PCL.
+
+For example, to acquire raw images (replace `/camera` with the camera's namespace):
+
+```bash
+ros2 action send_goal /camera/request_data ensenso_camera_msgs/action/RequestData \
+  '{request_raw_images: true, publish_results: false, include_results_in_response: true}'
+```
+
+The `request_data` Python helper requests clouds and normals by default. When using it
+with this build, set its ROS parameters `point_cloud:=false` and `normals:=false`.
+
+To restore full point-cloud support, export `ENSENSO_WITH_PCL=ON`, install the enabled
+PCL dependencies, and rebuild with `-DENSENSO_WITH_PCL=ON`. The ROS 1 build is unchanged.
 
 ## Run the nodes and scripts
 After the build you should be able to launch the ensenso camera nodes and run the provided Python scripts:

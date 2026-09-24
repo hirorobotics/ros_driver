@@ -179,6 +179,7 @@ void setRenderParams(NxLibItem const& cmdParams, RenderPointMapParams const* par
   }
 }
 
+#ifndef ENSENSO_DISABLE_PCL
 std::unique_ptr<ensenso::pcl::PointCloud> pointCloudFromNxLib(NxLibItem const& node, std::string const& frame,
                                                               bool isFileCamera = false,
                                                               PointCloudROI const* roi = nullptr)
@@ -331,6 +332,8 @@ std::unique_ptr<ensenso::pcl::PointCloudColored> retrieveTexturedPointCloud(NxLi
   return pointCloudTexturedFromNxLib(cmdResult[itmImages][itmRenderPointMapTexture],
                                      cmdResult[itmImages][itmRenderPointMap], targetFrame, isFileCamera);
 }
+
+#endif
 
 sensor_msgs::msg::ImagePtr retrieveRenderedDepthMap(NxLibItem const& cmdResult, std::string const& frame,
                                                     bool isFileCamera)

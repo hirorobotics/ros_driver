@@ -4,5 +4,6 @@
 # the ROS interface:
 #   100: Unknown exception
 #   101: tf exception
+#   102: Feature disabled in this driver build
 uint8 code
 string message
