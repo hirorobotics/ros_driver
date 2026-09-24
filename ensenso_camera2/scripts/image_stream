@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+import sys
+
+import ensenso_camera.ros2 as ros2py
+
+from ensenso_camera_msgs.msg import Parameter
+from sensor_msgs.msg import Image
+
+RequestData = ros2py.import_action("ensenso_camera_msgs", "RequestData")
+SetParameter = ros2py.import_action("ensenso_camera_msgs", "SetParameter")
+
+
+def _main(node_name):
+    node = ros2py.create_node(node_name, args=sys.argv)
+
+    loop_rate = ros2py.get_param(node, "rate", 2.0)
+    parameter_set = ros2py.get_param(node, "parameter_set", "image_stream")
+    timeout = ros2py.get_param(node, "timeout", 60)
+    use_rectified_image = ros2py.get_param(node, "rectified", False)
+    use_right_image = ros2py.get_param(node, "right", False)
+
+    set_parameter_client = ros2py.create_action_client(node, "set_parameter", SetParameter)
+    request_data_client = ros2py.create_action_client(node, "request_data", RequestData)
+
+    clients = [set_parameter_client, request_data_client]
+    ros2py.wait_for_servers(node, clients, timeout_sec=timeout)
+
+    image_publisher = ros2py.create_publisher(node, Image, "image", queue_size=1)
+
+    parameters = [
+        Parameter(key=Parameter.PROJECTOR, bool_value=False),
+        Parameter(key=Parameter.FRONT_LIGHT, bool_value=True),
+    ]
+    set_parameter_goal = SetParameter.Goal(parameter_set=parameter_set, parameters=parameters)
+    ros2py.send_action_goal(node, set_parameter_client, set_parameter_goal)
+
+    request_data_goal = RequestData.Goal()
+    request_data_goal.parameter_set = parameter_set
+    request_data_goal.request_rectified_images = use_rectified_image
+    request_data_goal.request_raw_images = not use_rectified_image
+    request_data_goal.include_results_in_response = True
+
+    def main_loop():
+        response = ros2py.send_action_goal(node, request_data_client, request_data_goal)
+        if not response.successful():
+            node.get_logger().warn("Action was not successful.")
+            return
+
+        result = response.get_result()
+        if result.error.code != 0:
+            node.get_logger().error(ros2py.format_error(result.error, "Error while acquiring images!"))
+            return
+
+        if use_rectified_image:
+            if use_right_image:
+                image = result.right_rectified_images[0]
+            else:
+                image = result.left_rectified_images[0]
+        else:
+            if use_right_image:
+                image = result.right_raw_images[0]
+            else:
+                image = result.left_raw_images[0]
+
+        node.get_logger().info("Publishing image.")
+        image_publisher.publish(image)
+
+    ros2py.execute_at_rate(node, main_loop, loop_rate)
+
+
+def main():
+    ros2py.wrap_main_function(_main, "ensenso_camera_image_stream")
+
+
+if __name__ == "__main__":
+    main()

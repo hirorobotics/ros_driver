@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+import sys
+
+import ensenso_camera.ros2 as ros2py
+
+CalibrateHandEye = ros2py.import_action("ensenso_camera_msgs", "CalibrateHandEye")
+
+
+def wait_for_goal_result(node, client, goal):
+    response = ros2py.send_action_goal(node, client, goal)
+    if not response.successful:
+        node.get_logger().error("Action was not successful.")
+    node.get_logger().info("Action successfull")
+    return response.get_result()
+
+
+def reset_patterns(node, client):
+    node.get_logger().info("Resetting pattern buffer...")
+    goal = CalibrateHandEye.Goal()
+    goal.command = CalibrateHandEye.Goal.RESET
+    wait_for_goal_result(node, client, goal)
+
+
+def capture_pattern(node, client):
+    node.get_logger().info("Capturing a pattern.")
+    goal = CalibrateHandEye.Goal()
+    goal.command = CalibrateHandEye.Goal.CAPTURE_PATTERN
+    result = wait_for_goal_result(node, client, goal)
+    if result and not result.found_pattern:
+        node.get_logger().error("Did not find any patterns.")
+
+
+def calibrate_hand_eye(node, client):
+    node.get_logger().info("Running calibration and storing results in EEPROM.")
+    goal = CalibrateHandEye.Goal()
+    goal.command = CalibrateHandEye.Goal.START_CALIBRATION
+    goal.write_calibration_to_eeprom = True
+    wait_for_goal_result(node, client, goal)
+
+
+def _main(node_name):
+    node = ros2py.create_node(node_name, args=sys.argv)
+
+    capture_wait = ros2py.Duration(ros2py.get_param(node, "capture_wait", 10.0))
+    count_poses = max(ros2py.get_param(node, "count_poses", 5), 6)
+    timeout = ros2py.get_param(node, "timeout", 60)
+
+    calibrate_hand_eye_client = ros2py.create_action_client(node, "calibrate_hand_eye", CalibrateHandEye)
+    ros2py.wait_for_server(node, calibrate_hand_eye_client, timeout_sec=timeout)
+
+    reset_patterns(node, calibrate_hand_eye_client)
+
+    for i in range(count_poses):
+        # ---- Let the Robot stand still here.
+        node.get_logger().info("Pattern number: {}".format(i + 1))
+        start_capture = node.get_clock().now()
+        capture_pattern(node, calibrate_hand_eye_client)
+
+        if i == count_poses - 1:
+            node.get_logger().info("Finished capturing patterns")
+            break
+
+        # ---- Move the robot to the next position.
+        time_until_capture = ros2py.sub_durations(capture_wait, (node.get_clock().now() - start_capture))
+        while time_until_capture > ros2py.Duration(0.8):
+            start_sleep = node.get_clock().now()
+            node.get_logger().info(
+                "Capturing next pattern in {}s".format(ros2py.duration_to_seconds(time_until_capture))
+            )
+            ros2py.sleep(node, 0.75)
+            time_until_capture = ros2py.sub_durations(time_until_capture, (node.get_clock().now() - start_sleep))
+        ros2py.sleep(node, time_until_capture)
+
+    calibrate_hand_eye(node, calibrate_hand_eye_client)
+
+
+def main():
+    ros2py.wrap_main_function(_main, "ensenso_camera_hand_eye_calibration")
+
+
+if __name__ == "__main__":
+    main()

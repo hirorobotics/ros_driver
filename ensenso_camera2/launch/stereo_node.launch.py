@@ -55,7 +55,7 @@ def launch_setup(context, *args, **kwargs):
 
 def generate_launch_description():
     namespace_arg = DeclareLaunchArgument("namespace", default_value=ensenso.EMPTY_STRING)
-    serial_launch_arg = DeclareLaunchArgument("serial", default_value="stereo_cam")
+    serial_launch_arg = DeclareLaunchArgument("serial", default_value="")
     settings_launch_arg = DeclareLaunchArgument("settings", default_value=ensenso.EMPTY_STRING)
     file_camera_path_launch_arg = DeclareLaunchArgument("file_camera_path", default_value=ensenso.EMPTY_STRING)
     fixed_launch_arg = DeclareLaunchArgument("fixed", default_value="False")
