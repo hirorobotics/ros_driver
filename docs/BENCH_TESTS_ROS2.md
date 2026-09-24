@@ -6,7 +6,7 @@ The commands below assume a built ROS 2 driver, Jazzy, namespace `/ensenso`, and
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source /home/fafux/ros/ensenso_ws/install/setup.bash
+source ros/ensenso_ws/install/setup.bash
 ros2 pkg prefix ensenso_camera
 ```
 

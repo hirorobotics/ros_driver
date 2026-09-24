@@ -14,7 +14,7 @@ The commands below use `base_link` for the robot base, `tool0` for the moving to
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source /home/fafux/ros/ensenso_ws/install/setup.bash
+source ros/ensenso_ws/install/setup.bash
 read -r -p 'Camera serial: ' ENSENSO_CALIB_SERIAL
 
 ros2 launch ensenso_camera stereo_node.launch.py \
@@ -34,7 +34,7 @@ For collection, all three camera/link/target frame arguments deliberately match.
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source /home/fafux/ros/ensenso_ws/install/setup.bash
+source ros/ensenso_ws/install/setup.bash
 
 ros2 run tf2_ros tf2_echo base_link tool0
 ```
