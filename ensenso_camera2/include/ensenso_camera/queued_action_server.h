@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ensenso_camera/ros2/core.h"
 #include "ensenso_camera/ros2/logging.h"
 #include "ensenso_camera/ros2/node_handle.h"
 
